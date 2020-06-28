@@ -51,12 +51,15 @@ class Extracter:
     def extract_html_by_xpath(self, xpath, url=None):
         try:
             elems: List = self.selector.xpath(xpath)
+
             if not elems and '/tbody' in xpath:
                 xpath = xpath.replace('/tbody', '')
                 elems: List = self.selector.xpath(xpath)
         except:
+            print('ssrrr')
             return ''
         else:
+            print('extract:54', elems)
             if len(elems) > 0:
                 HTML: str = "".join(
                     [etree.tostring(t, encoding='utf-8').decode('utf-8') for t in elems])

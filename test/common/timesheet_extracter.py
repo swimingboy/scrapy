@@ -119,6 +119,7 @@ class TimesheetExtracter:
 
     @staticmethod
     def flat_tree(elem, layer=0, nodes=None):
+
         if not nodes:
             nodes = []
         if len(nodes) <= layer:
@@ -127,9 +128,12 @@ class TimesheetExtracter:
             nodes[layer].append(elem)
 
         if not hasattr(elem, 'children'):
+
             return
         for i in elem.children:
+
             TimesheetExtracter.flat_tree(i, layer + 1, nodes)
+
         return nodes
 
     @staticmethod
@@ -161,6 +165,7 @@ class TimesheetExtracter:
     @staticmethod
     def extract_date(text):
         text = text.strip()
+        # print('extract_date:',text)
         for key_word, date in [
             ('本日', datetime.now().strftime("%m/%d")),
             ('今日', datetime.now().strftime("%m/%d")),
@@ -168,6 +173,7 @@ class TimesheetExtracter:
         ]:
             text = text.replace(key_word, date)
         weekday = '月火水木金土日'
+        print('176:',text)
         if text in weekday:
             today_of_week = datetime.today().weekday()
             text_of_week_order = weekday.find(text)
@@ -184,6 +190,8 @@ class TimesheetExtracter:
         msg = ''
         datetime.today().weekday()
         res = re.findall(r'\d+', text)
+        print(text)
+        print('extract_date:192:',res)
         if len(res) == 2:
             mon, day = res
             msg = 'ok'
@@ -203,14 +211,18 @@ class TimesheetExtracter:
         else:
             mon, day = 0, res[0]
             msg = 'error'
-            # print(f'error date: {text}, {res}')
+            print(f'error date: {text}, {res}')
         return dict(date=TimesheetExtracter.build_date(month=mon, day=day), msg=msg)
 
     @staticmethod
     def extract_time(text, show_debug=False):
         # 15:00～ラスト
-
+        print(text)
         res = re.findall(r'\d{1,2}:\d{1,2}', text)
+        if not res:
+            res = re.findall(r'\d{1,2}', text)
+            res = [i+':00' for i in res]
+        print('e1',res)
         msg = ''
         if len(res) == 2:
             start, end = res
@@ -257,46 +269,54 @@ class TimesheetExtracter:
                     break
 
     @staticmethod
-    def get_time_sheet(html: str, show_debug=False):
+    def get_time_sheet(html: str, show_debug=False, time=None):
         for t in re.findall('(<br.*?>)', html):
             html = html.replace(t, ' ')
-
         bs = BeautifulSoup(html, 'html.parser')
         show_debug and TimesheetExtracter.print_tree(bs, 0)
         TimesheetExtracter.unwrap_all(bs, 0, show_debug)
         show_debug and TimesheetExtracter.print_tree(bs, 0)
 
         periods: List[Period] = []
-
+        # print('277:',bs.text)
         flat = TimesheetExtracter.flat_tree(bs)
+        # print('279:',flat)
         for layer in flat:
+            # print(layer)
             if len(layer) >= 7:  # 7 days per week
                 TimesheetExtracter.clear_diff(layer)
-        flat = TimesheetExtracter.flat_tree(bs)
+        # flat = TimesheetExtracter.flat_tree(bs)
+        # print('f1',flat)
         # <这里为www.y-momo.jp加一个特例
         # 并为同类型的y-aqua.jp添加特例
-        if html.find('<ul class="clearfix">\n\n<li><span>') != -1 or \
-                re.findall(r'）</span>\n\n<!---->\n\d{2}[:]\d{2}\xa0〜\xa0', html):
-            temp_bs = BeautifulSoup(html, 'html.parser')
-            lis = temp_bs.find_all('li')
-            lens = [len(i) for i in flat]
-            max_index = lens.index(max(lens))
-
-            for index, lii in enumerate(lis):
-                t = BeautifulSoup("<div>" + list(lii.children)[-1] + "</div>", 'html.parser')
-                flat[max_index].insert(2 * index + 1, t)
+        # if html.find('<ul class="clearfix">\n\n<li><span>') != -1 or \
+        #         re.findall(r'）</span>\n\n<!---->\n\d{2}[:]\d{2}\xa0〜\xa0', html):
+        #     temp_bs = BeautifulSoup(html, 'html.parser')
+        #     lis = temp_bs.find_all('li')
+        #     lens = [len(i) for i in flat]
+        #     max_index = lens.index(max(lens))
+        #
+        #     for index, lii in enumerate(lis):
+        #         t = BeautifulSoup("<div>" + list(lii.children)[-1] + "</div>", 'html.parser')
+        #         flat[max_index].insert(2 * index + 1, t)
         # />
+
         lens = [len(i) for i in flat]
         max_index = lens.index(max(lens))
         max_value = lens[max_index]
         pre_value = lens[max_index - 1]
+        print(lens,max_index,max_value,pre_value)
 
         try:
-            if max_value / pre_value in [7, 8]:
+            if  max_value / pre_value in [7, 8,9]:
                 # 若干排 七八列的, 日期是表头
+                print('1')
                 k = int(max_value / pre_value)
                 elems = flat[max_index]
+                # print('1k',elems[:k])
+                # print('k:',elems[k:])
                 date = [TimesheetExtracter.extract_date(i.text) for i in elems[:k]]
+
                 # if all([i['msg'] == 'error' for i in date]):
                 #     days = [i['date'].day for i in date]
                 #     max_day = max(days)
@@ -315,8 +335,11 @@ class TimesheetExtracter:
                     [TimesheetExtracter.extract_time(i.text) for i in elems[k:2 * k]],
                     [TimesheetExtracter.extract_time(i.text) for i in elems[2 * k:3 * k]]
                 ]
+
+
             elif max_value / pre_value == 2 or max_value in [14, 16, 28]:
                 # 若干排 两列的, 一列日期, 一列时间
+                print('two line')
                 elems = flat[max_index]
                 date = []
                 time = [[]]
@@ -324,16 +347,16 @@ class TimesheetExtracter:
                 # print(flat[max_index - 1])
                 # print(elems[0], elems[1], elems[2], elems[3])
                 for item in elems:
-                    # print(item)
+                    print('item:',item)
                     if index % 2 == 0:
                         extr = TimesheetExtracter.extract_date(item.text)
                         # print('data', extr)
                         date.append(extr)
                     else:
-                        # print('time')
+                        print('time')
                         time[0].append(TimesheetExtracter.extract_time(item.text))
                     index += 1
-                # print('若干排 两列的')
+                print('若干排 两列的')
 
             else:
                 # 我也不知道多少, 随缘匹配吧
@@ -343,22 +366,26 @@ class TimesheetExtracter:
 
                 # print_tree(bs, 0)
                 # print(elems)
-                # print('我也不知道多少, 随缘匹配吧')
-
-            if date[0]['msg'] == 'ok' and (
-                    all([i['msg'] == 'error' for i in date[1:]])
-                    or
-                    sum([i['msg'] == 'error' for i in date[1:]]) <= 3
-            ):
-                # 如果日期的第一个OK, 但是后面的不太OK, 那么可能是
-                # 1/1 2 3 4 5 6 7
-                # 这样的格式, 那么可以递推试试
-                for i in range(len(date[1:])):
-                    date[i + 1]['date'] = date[0]['date'] + timedelta(days=i + 1)
-
+                print('我也不知道多少, 随缘匹配吧')
+            # print('s1',date)
+            # if date[0]['msg'] == 'ok' and (
+            #         all([i['msg'] == 'error' for i in date[1:]])
+            #         or
+            #         sum([i['msg'] == 'error' for i in date[1:]]) <= 3
+            # ):
+            #     # 如果日期的第一个OK, 但是后面的不太OK, 那么可能是
+            #     # 1/1 2 3 4 5 6 7
+            #     # 这样的格式, 那么可以递推试试
+            #     print('s2')
+            #     for i in range(len(date[1:])):
+            #         date[i + 1]['date'] = date[0]['date'] + timedelta(days=i + 1)
+            print('ssssss')
+            print('381:', time)
+            print('382:',date)
             if all([i['msg'] == 'error' for i in date]):
                 # 如果日期的日如果全都是错的, 但是能够排成公差为1的数列, 那就算上
                 days = [i['date'].day for i in date]
+                print(days)
                 max_day = max(days)
                 days = [i + max_day if i < 14 else i for i in days]
                 if all([y - x == 1 for x, y in zip(days, days[1:])]):
@@ -379,6 +406,7 @@ class TimesheetExtracter:
                 ]
 
             flag = False
+            print('s2',time)
             for time_ in time:
                 for index, item in enumerate(time_):
                     if item['msg'] == 'ok':
@@ -405,7 +433,7 @@ class TimesheetExtracter:
                         flag = True
                 if flag:
                     break
-            # print(periods)
+            print(periods)
 
         except Exception as e:
             print(e)

@@ -60,9 +60,11 @@ class Spider:
         if not filter:
             filter = {}
 
-        ret = self.spiders_col_.find(
-            filter, cols
-        ).skip(page_size * (page_no - 1)).limit(page_size).sort(sort)
+        # ret = self.spiders_col_.find(
+        #     filter, cols
+        # ).skip(page_size * (page_no - 1)).limit(page_size).sort(sort)
+        ret = self.spiders_col_.find()
+        print(ret)
         return list(ret)
 
     def get_spider(self, cols='default', filter=None):
